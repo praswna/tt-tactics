@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TT Tactics 전술 보드</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 코치의 전술 보드(탑뷰, 데스크톱에서 sticky) 왼쪽 + 구별 설명 카드 오른쪽. 폰에서는 한 열로 쌓인다. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --fg: #171d26;
+  --muted: #5d6878;
+  --line: #d5dbe3;
+  --board: #e2e7ed;
+  --grid: #ccd3dc;
+  --table: #2a5ea8;
+  --table-line: #ffffff;
+  --net: #2b3440;
+  --zone: rgba(255, 255, 255, 0.38);
+  --me: #d64438;
+  --me-ink: #ffffff;
+  --opp: #2b313a;
+  --opp-ink: #ffffff;
+  --ball: #f4a622;
+  --accent: #2a5ea8;
+  --accent-ink: #ffffff;
+  --focus: #f4a622;
+  --font-display: "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101418; --surface: #181d24; --fg: #e6eaef; --muted: #98a3b3; --line: #2a323d;
+    --board: #0b0e12; --grid: #1c232c; --table: #1e4d92; --table-line: #dfe6ef; --net: #aab4c2;
+    --zone: rgba(255, 255, 255, 0.22); --me: #ef6a5e; --me-ink: #ffffff; --opp: #d2d9e2; --opp-ink: #0b0e12;
+    --ball: #f7b43c; --accent: #5b8fd9; --accent-ink: #0b0e12; --focus: #f7b43c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101418; --surface: #181d24; --fg: #e6eaef; --muted: #98a3b3; --line: #2a323d;
+  --board: #0b0e12; --grid: #1c232c; --table: #1e4d92; --table-line: #dfe6ef; --net: #aab4c2;
+  --zone: rgba(255, 255, 255, 0.22); --me: #ef6a5e; --me-ink: #ffffff; --opp: #d2d9e2; --opp-ink: #0b0e12;
+  --ball: #f7b43c; --accent: #5b8fd9; --accent-ink: #0b0e12; --focus: #f7b43c;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px;
+}
+button, select { font: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.top { max-width: 1180px; margin: 0 auto; padding-block: 18px 14px; display: grid; gap: 6px; }
+.brand { font-family: var(--font-display); letter-spacing: 0.1em; font-size: 13px; color: var(--muted); }
+.brand span { font-family: var(--font-body); letter-spacing: 0; margin-left: 8px; font-size: 12px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 34px); line-height: 1.2; margin: 0; text-wrap: balance; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+
+.layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 880px) {
+  .layout { grid-template-columns: minmax(300px, 480px) minmax(0, 1fr); align-items: start; }
+  .board-wrap { position: sticky; top: 12px; }
+}
+.board-wrap { min-width: 0; display: grid; gap: 8px; }
+.board { width: 100%; height: auto; max-height: calc(100vh - 150px); display: block; margin: 0 auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); padding-inline: 2px; }
+.legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.legend .ln { display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--muted); vertical-align: 3px; margin-right: 5px; }
+
+.panel { min-width: 0; display: grid; gap: 12px; }
+.stepper { display: flex; flex-wrap: wrap; gap: 6px; }
+.step-btn {
+  font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline;
+}
+.step-btn b { font-family: var(--font-display); font-weight: 400; font-size: 14px; }
+.step-btn .dot { width: 7px; height: 7px; border-radius: 50%; align-self: center; }
+.step-btn[aria-current="step"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.step-btn[aria-current="step"] .dot { outline: 1.5px solid var(--accent-ink); }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn {
+  padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 92px; }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.controls select { padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.controls .spacer { flex: 1; }
+.kbd { font-size: 11px; color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 14px; }
+.card-head { display: flex; gap: 14px; align-items: flex-start; }
+.num { font-family: var(--font-display); font-size: 46px; line-height: 0.9; min-width: 58px; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.num.wide { font-size: 30px; line-height: 1.1; }
+.head-text { display: grid; gap: 6px; min-width: 0; }
+.actor { font-size: 11px; padding: 2px 8px; border-radius: 999px; width: max-content; letter-spacing: 0.04em; }
+.actor.me { background: var(--me); color: var(--me-ink); }
+.actor.opp { background: var(--opp); color: var(--opp-ink); }
+.title { font-size: 17px; font-weight: 600; margin: 0; line-height: 1.35; text-wrap: balance; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 14px; margin: 0; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.facts div { min-width: 0; }
+.facts dt { color: var(--muted); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+.facts dd { margin: 0; font-weight: 500; font-size: 13px; }
+.sec h3 { font-size: 11.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px; font-weight: 600; }
+.sec p { margin: 0; max-width: 62ch; }
+.sec ul, .sec ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-width: 62ch; }
+.branch { border-top: 1px dashed var(--line); padding-top: 12px; display: grid; gap: 8px; }
+.branch h3 { font-size: 11.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin: 0; font-weight: 600; }
+.branch-opts { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.branch-btn {
+  text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center;
+}
+.branch-btn b { font-family: var(--font-display); font-weight: 400; font-size: 20px; grid-row: span 2; color: var(--muted); }
+.branch-btn[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.branch-btn[aria-pressed="true"] b { color: var(--accent); }
+.branch-btn small { color: var(--muted); font-size: 12px; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.steps button {
+  width: 100%; text-align: left; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+  display: flex; gap: 10px; align-items: baseline;
+}
+.steps button b { font-family: var(--font-display); font-weight: 400; font-size: 15px; min-width: 28px; }
+.steps button .who { margin-left: auto; font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.who.me { background: var(--me); color: var(--me-ink); } .who.opp { background: var(--opp); color: var(--opp-ink); }
+details { font-size: 12.5px; color: var(--muted); }
+details summary { cursor: pointer; }
+details pre { margin: 8px 0 0; padding: 10px; background: var(--bg); border-radius: 6px; overflow-x: auto; font-size: 11.5px; line-height: 1.45; color: var(--fg); }
+
+.foot { max-width: 1180px; margin: 28px auto 0; color: var(--muted); font-size: 12.5px; display: grid; gap: 4px; }
+.foot code { font-size: 11.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+/* ---- SVG 보드 ---- */
+.board text { font-family: var(--font-body); }
+.board .floor { fill: var(--board); }
+.board .grid { stroke: var(--grid); stroke-width: 0.6; }
+.board .table { fill: var(--table); stroke: var(--table-line); stroke-width: 2; }
+.board .zone { stroke: var(--zone); stroke-width: 0.8; stroke-dasharray: 3 3; fill: none; }
+.board .center { stroke: var(--table-line); stroke-width: 1; }
+.board .net { stroke: var(--net); stroke-width: 3; }
+.board .post { fill: var(--net); }
+.board .lbl { fill: var(--muted); font-size: 7.5px; letter-spacing: 0.04em; text-anchor: middle; }
+.board .lbl.small { font-size: 6.5px; }
+.board .lbl.start { text-anchor: start; }
+.board .scale { stroke: var(--muted); stroke-width: 1; }
+.board .shot { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.board .me .shot, .board .me .foot-arrow, .board .me .racket-line, .board .me .ring, .board .me .ghost { stroke: var(--me); }
+.board .opp .shot, .board .opp .foot-arrow, .board .opp .racket-line, .board .opp .ring, .board .opp .ghost { stroke: var(--opp); }
+.board .me .racket-head, .board .me .numb circle, .board .me .arrowhead { fill: var(--me); }
+.board .opp .racket-head, .board .opp .numb circle, .board .opp .arrowhead { fill: var(--opp); }
+.board .me .numb text { fill: var(--me-ink); } .board .opp .numb text { fill: var(--opp-ink); }
+.board .me .stroke-label { fill: var(--me); }
+.board .opp .stroke-label { fill: var(--opp); }
+.board .foot-arrow { fill: none; stroke-width: 1.6; stroke-dasharray: 4 3; }
+.board .ghost { fill: none; stroke-dasharray: 2 2; stroke-width: 1.2; opacity: 0.8; }
+.board .racket-line { stroke-width: 2; }
+.board .racket-head { stroke: var(--surface); stroke-width: 1; }
+.board .ring { fill: none; stroke-width: 1.5; }
+.board .ring-dot { fill: var(--surface); }
+.board .ball { fill: var(--ball); stroke: rgba(0, 0, 0, 0.3); stroke-width: 0.6; }
+.board .history { opacity: 0.26; }
+.board .badge rect { fill: var(--surface); stroke: var(--line); stroke-width: 0.8; }
+.board .badge text { font-size: 8px; fill: var(--fg); text-anchor: middle; dominant-baseline: middle; font-weight: 500; }
+.board .stroke-label { font-size: 7.5px; text-anchor: middle; font-weight: 500; }
+.board .numb circle { stroke: var(--surface); stroke-width: 1.2; }
+.board .numb text { font-family: var(--font-display); font-size: 9px; text-anchor: middle; dominant-baseline: middle; }
+.board .player .body { stroke: var(--surface); stroke-width: 1.5; }
+.board .player.me .body { fill: var(--me); } .board .player.opp .body { fill: var(--opp); }
+.board .player text { font-size: 9px; font-weight: 600; text-anchor: middle; }
+.board .player.me text { fill: var(--me-ink); } .board .player.opp text { fill: var(--opp-ink); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">TT TACTICS <span>전술 시각화 프로토타입 v0.1</span></div>
+  <h1 id="tactic-title">전술 보드</h1>
+  <div class="chips" id="tactic-chips"></div>
+</header>
+
+<main class="layout">
+  <section class="board-wrap" aria-label="전술 보드">
+    <svg id="board" class="board" viewBox="30 80 360 475" role="img" aria-label="탁구대 탑뷰 전술 보드">
+      <defs>
+        <marker id="arrow-me" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M0 0 L8 4 L0 8 Z" style="fill: var(--me)"></path>
+        </marker>
+        <marker id="arrow-opp" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M0 0 L8 4 L0 8 Z" style="fill: var(--opp)"></path>
+        </marker>
+      </defs>
+    </svg>
+    <div class="legend">
+      <span><i class="sw" style="background: var(--me)"></i>나</span>
+      <span><i class="sw" style="background: var(--opp)"></i>상대</span>
+      <span><i class="sw" style="background: var(--ball)"></i>공</span>
+      <span><i class="ln"></i>풋워크</span>
+      <span>◎ 바운드</span>
+      <span>↓ 하회전 · ↑ 상회전 · ○ 너클</span>
+    </div>
+  </section>
+
+  <aside class="panel" aria-label="단계별 설명">
+    <nav class="stepper" id="stepper" aria-label="구 선택"></nav>
+    <div class="controls">
+      <button class="btn" id="prev" type="button">이전</button>
+      <button class="btn primary" id="play" type="button">재생</button>
+      <button class="btn" id="next" type="button">다음</button>
+      <select id="speed" aria-label="재생 속도">
+        <option value="1.6">느리게</option>
+        <option value="1" selected>보통 속도</option>
+        <option value="0.6">빠르게</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn" id="overview" type="button" aria-pressed="false">전체 보기</button>
+    </div>
+    <article class="card" id="card" aria-live="polite"></article>
+    <span class="kbd">키보드: ← → 로 구 이동, 스페이스로 재생</span>
+  </aside>
+</main>
+
+<footer class="foot">
+  <div>이 보드는 전술 데이터(<code>tactics/serve-3rd-ball-pivot-fh.json</code>)만으로 그려집니다. 좌표는 미터 단위, 원점은 테이블 중심입니다. 테이블 2.74 × 1.525 m, 바닥 격자 0.5 m.</div>
+  <div>설계 문서: <code>docs/DESIGN.md</code> · 데이터 모델: <code>schema/tactic.ts</code></div>
+</footer>
+
+<script id="tactic-data" type="application/json">
+{
+  "id": "serve-3rd-ball-pivot-fh",
+  "title": "서브 후 3구 공격: 돌아서기 → 포핸드 → 스텝 → 포핸드 루핑",
+  "category": "서브·3구",
+  "level": "중급",
+  "tags": [
+    "3구 공격",
+    "피벗",
+    "풋워크",
+    "긴 서브"
+  ],
+  "players": {
+    "me": {
+      "hand": "R",
+      "grip": "셰이크핸드"
+    },
+    "opp": {
+      "hand": "R",
+      "grip": "셰이크핸드"
+    }
+  },
+  "coords": "미터 단위. 원점 = 테이블 중심, +x = 내 오른쪽(오른손 FH 쪽), +y = 상대 방향",
+  "start": {
+    "me": {
+      "x": -0.55,
+      "y": -1.65
+    },
+    "opp": {
+      "x": 0.1,
+      "y": 1.7
+    }
+  },
+  "summary": "긴 하회전/너클 서브로 상대의 리턴을 내 백쪽으로 유도하고, 돌아서서(피벗) 포핸드로 3구를 선제한다. 돌아선 뒤 비어 있는 포핸드 사이드로 블록이 오면 스텝으로 따라가 포핸드 루핑으로 마무리한다. 핵심은 '서브 → 피벗 → 복귀 스텝'이 하나의 풋워크 세트라는 점이다.",
+  "root": "s1",
+  "defaultBranch": "A",
+  "shots": [
+    {
+      "id": "s1",
+      "n": 1,
+      "actor": "me",
+      "short": "서브",
+      "title": "긴 하회전/너클 서브 → 상대 백핸드 깊은 코스",
+      "stroke": "FH 펜듈럼 서브",
+      "side": "FH",
+      "spin": [
+        "하회전",
+        "너클"
+      ],
+      "length": "롱",
+      "target": "상대 백핸드 엔드라인 근처(딥)",
+      "body": {
+        "x": -0.55,
+        "y": -1.65
+      },
+      "contact": {
+        "x": -0.5,
+        "y": -1.5
+      },
+      "bounces": [
+        {
+          "x": -0.39,
+          "y": -1.2
+        },
+        {
+          "x": 0.45,
+          "y": 1.2
+        }
+      ],
+      "explain": {
+        "what": "백핸드 코너에서 포핸드 펜듈럼 서브. 첫 바운드는 내 엔드라인 근처, 둘째 바운드는 상대 백핸드 엔드라인 30cm 안쪽에 떨어지는 빠르고 긴 서브다. 같은 동작으로 하회전과 너클을 섞는다.",
+        "why": "긴 서브는 짧게 놓는 스톱 리시브가 거의 불가능해 리턴이 반드시 길게 온다. 하회전과 너클을 구분 못하면 푸시가 뜨거나(너클) 네트에 걸리고(하회전), 안전하게 가려다 크로스로 밀게 되어 공이 내 백쪽으로 돌아온다.",
+        "keys": [
+          "둘째 바운드가 상대 엔드라인 30cm 안쪽에 떨어질 만큼 깊게. 하프롱이 되면 상대가 먼저 공격한다.",
+          "임팩트 직후 왼발을 한 발 왼쪽·뒤로 빼면서 라켓은 허리 높이로. 돌아설 준비를 서브 동작의 일부로 만든다.",
+          "너클은 하회전과 같은 스윙 궤적에서 라켓 각도만 세워 접촉 시간을 짧게."
+        ],
+        "mistakes": [
+          "서브 후 제자리에 서서 리턴을 기다리기.",
+          "회전을 많이 걸려다 서브가 짧아지거나 높이 뜨기."
+        ]
+      },
+      "next": "s2"
+    },
+    {
+      "id": "s2",
+      "n": 2,
+      "actor": "opp",
+      "short": "리시브",
+      "title": "상대 백핸드 푸시/드라이브 → 내 백쪽 깊은 코스",
+      "stroke": "BH 푸시 (너클이면 BH 드라이브)",
+      "side": "BH",
+      "spin": [
+        "하회전"
+      ],
+      "length": "롱",
+      "target": "내 백핸드 깊은 코스(크로스)",
+      "footwork": {
+        "type": "사이드스텝",
+        "label": "백핸드 쪽으로 반 발"
+      },
+      "body": {
+        "x": 0.62,
+        "y": 1.8
+      },
+      "contact": {
+        "x": 0.55,
+        "y": 1.5
+      },
+      "bounces": [
+        {
+          "x": -0.48,
+          "y": -1.12
+        }
+      ],
+      "explain": {
+        "what": "상대 입장에서 가장 안전한 선택은 백핸드로 크로스 리턴이다. 하회전으로 읽었으면 긴 푸시, 너클로 읽었으면 얕은 드라이브나 플릭이 온다.",
+        "why": "긴 서브를 백핸드로 받으면 자연스러운 각도가 크로스다. 이 패턴은 '리턴이 내 백쪽으로 온다'는 전제 위에 서 있다. 포핸드 쪽으로 오면 바로 포핸드 공격 패턴으로 전환한다.",
+        "keys": [
+          "상대 라켓 각도와 공의 높이로 구질을 읽는다. 푸시(하회전)면 루프, 드라이브(상회전)면 카운터 드라이브.",
+          "공이 상대 라켓을 떠나는 순간 이미 돌아서는 첫 발이 나가야 한다."
+        ],
+        "mistakes": [
+          "공이 바운드된 뒤에 움직이기 시작하기.",
+          "상대가 너클을 드라이브로 받았는데 루프 스윙으로 들어가 오버미스."
+        ]
+      },
+      "next": "s3"
+    },
+    {
+      "id": "s3",
+      "n": 3,
+      "actor": "me",
+      "short": "피벗 FH",
+      "title": "돌아서기(피벗) → 포핸드 루프 드라이브 → 상대 백핸드 크로스",
+      "stroke": "FH 루프 드라이브 (상회전 리턴이면 FH 드라이브)",
+      "side": "FH",
+      "spin": [
+        "상회전"
+      ],
+      "length": "롱",
+      "target": "상대 백핸드 깊은 크로스",
+      "footwork": {
+        "type": "피벗",
+        "label": "돌아서기(피벗)"
+      },
+      "body": {
+        "x": -0.97,
+        "y": -1.78
+      },
+      "contact": {
+        "x": -0.63,
+        "y": -1.56
+      },
+      "bounces": [
+        {
+          "x": 0.5,
+          "y": 1.15
+        }
+      ],
+      "explain": {
+        "what": "왼발을 뒤·왼쪽으로 크게 빼서 몸을 열고(오른발 축), 백쪽으로 온 공을 몸의 오른쪽 앞에 두고 포핸드로 친다. 하회전 푸시에는 위로 끌어올리는 루프, 상회전 드라이브에는 앞으로 치는 드라이브.",
+        "why": "백핸드로 받는 것보다 포핸드가 회전과 힘을 훨씬 많이 실을 수 있다. 코스는 상대 백핸드 깊은 크로스. 백핸드 코너에서 가장 자연스러운 각도이고, 상대의 백핸드 블록을 유도해 다음 구를 예측 가능하게 만든다.",
+        "keys": [
+          "공이 백쪽 깊이 올수록 더 많이 빠져야 한다. 공과 몸 사이 거리는 팔 하나 길이.",
+          "임팩트 순간 체중은 왼발에서 오른발로. 돌아선 자세에서 멈추지 말고 회전 관성을 그대로 복귀 스텝으로 잇는다.",
+          "돌아서면 내 포핸드 사이드가 통째로 비어 있다는 걸 알고 친다. 치자마자 오른쪽으로 갈 준비."
+        ],
+        "mistakes": [
+          "공을 쫓아가서 몸 가운데(배 앞)에서 치기. 힘이 안 실리고 코스가 짧아진다.",
+          "치고 나서 멈춰 서서 결과를 보기. 4구가 포핸드 쪽으로 오면 늦는다."
+        ]
+      },
+      "next": {
+        "branches": [
+          {
+            "key": "A",
+            "label": "비어 있는 내 포핸드 사이드로 블록",
+            "share": 0.6,
+            "next": "s4a"
+          },
+          {
+            "key": "B",
+            "label": "다시 내 백쪽으로 블록(크로스)",
+            "share": 0.4,
+            "next": "s4b"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s4a",
+      "n": 4,
+      "actor": "opp",
+      "short": "블록",
+      "title": "상대 백핸드 블록 → 비어 있는 내 포핸드 사이드(스트레이트)",
+      "stroke": "BH 블록",
+      "side": "BH",
+      "spin": [
+        "상회전"
+      ],
+      "length": "하프롱",
+      "target": "내 포핸드 사이드 깊은 코스",
+      "body": {
+        "x": 0.62,
+        "y": 1.8
+      },
+      "contact": {
+        "x": 0.6,
+        "y": 1.45
+      },
+      "bounces": [
+        {
+          "x": 0.62,
+          "y": -1.1
+        }
+      ],
+      "explain": {
+        "what": "내가 돌아서서 비어 둔 포핸드 사이드로 백핸드 블록을 스트레이트로 넣는다. 돌아서기 패턴에 대한 교과서적인 대응이다.",
+        "why": "돌아선 선수는 백핸드 코너 바깥에 서 있어 포핸드 쪽까지 거리가 1m 이상이다. 상대는 힘을 쓰지 않고 코스만 바꿔도 득점 기회를 만든다.",
+        "keys": [
+          "상대 라켓 면이 내 포핸드 쪽을 향하는지 임팩트 전에 본다.",
+          "블록은 낮고 빠른 상회전. 바운드 후 뻗어 나오므로 테이블에서 한 발 떨어진 위치로 간다."
+        ],
+        "mistakes": [
+          "상대가 어디로 블록할지 보기 전에 백쪽에서 한 번 더 치려고 준비하기."
+        ]
+      },
+      "next": "s5a"
+    },
+    {
+      "id": "s5a",
+      "n": 5,
+      "actor": "me",
+      "short": "결정구",
+      "title": "스텝으로 따라가 포핸드 루핑 → 상대 포핸드 와이드 크로스",
+      "stroke": "FH 루핑(파워 드라이브)",
+      "side": "FH",
+      "spin": [
+        "상회전"
+      ],
+      "length": "롱",
+      "target": "상대 포핸드 와이드 크로스",
+      "footwork": {
+        "type": "크로스오버",
+        "label": "크로스오버 또는 큰 사이드스텝"
+      },
+      "body": {
+        "x": 0.32,
+        "y": -1.76
+      },
+      "contact": {
+        "x": 0.66,
+        "y": -1.5
+      },
+      "bounces": [
+        {
+          "x": -0.62,
+          "y": 1.18
+        }
+      ],
+      "explain": {
+        "what": "3구 임팩트 직후 오른발부터 오른쪽으로 크로스오버(또는 큰 사이드스텝 두 번)로 약 1.3m를 이동해 포핸드 루핑. 코스는 상대 포핸드 와이드 크로스.",
+        "why": "상대는 백핸드 코너에서 블록한 직후라 포핸드 코너가 비어 있다. 블록은 낮은 상회전이므로 얇게 깎는 루프보다 두껍게 앞으로 치는 루핑이 맞다.",
+        "keys": [
+          "몸이 공보다 먼저 도착해야 한다. 발이 멈춘 뒤에 스윙을 시작한다.",
+          "이동 중 라켓은 낮게, 시선은 공에. 마지막 발이 땅에 닿는 타이밍과 백스윙 끝을 맞춘다.",
+          "상대가 포핸드 쪽 커버에 먼저 들어오면 코스를 다시 백핸드로 바꾼다."
+        ],
+        "mistakes": [
+          "발은 그대로 두고 팔만 뻗어 치는 리치 샷. 공이 뜨고 힘이 없다.",
+          "달려가면서 치기. 몸이 흐르면 공이 사이드로 빠진다."
+        ]
+      }
+    },
+    {
+      "id": "s4b",
+      "n": 4,
+      "actor": "opp",
+      "short": "블록",
+      "title": "상대 백핸드 블록 → 다시 내 백쪽(크로스)",
+      "stroke": "BH 블록",
+      "side": "BH",
+      "spin": [
+        "상회전"
+      ],
+      "length": "하프롱",
+      "target": "내 백핸드 코스(크로스)",
+      "body": {
+        "x": 0.62,
+        "y": 1.8
+      },
+      "contact": {
+        "x": 0.6,
+        "y": 1.45
+      },
+      "bounces": [
+        {
+          "x": -0.45,
+          "y": -1.12
+        }
+      ],
+      "explain": {
+        "what": "수비적인 상대는 코스를 바꾸지 않고 안전하게 크로스로 블록한다. 공이 다시 내 백쪽으로 온다.",
+        "why": "크로스는 테이블 대각선이 길어 미스 확률이 낮다. 상대가 내 피벗 공격을 버티는 데 급하면 이 선택을 한다.",
+        "keys": [
+          "같은 자리에서 포핸드로 한 번 더 칠 수 있는 상황. 복귀 스텝은 작게, 라켓은 바로 백스윙으로."
+        ],
+        "mistakes": [
+          "A 분기를 예상해 미리 오른쪽으로 달려가기. 다시 백쪽으로 오면 돌아오지 못한다."
+        ]
+      },
+      "next": "s5b"
+    },
+    {
+      "id": "s5b",
+      "n": 5,
+      "actor": "me",
+      "short": "결정구",
+      "title": "제자리에서 포핸드 연속 공격 → 상대 미들(엘보우)",
+      "stroke": "FH 드라이브",
+      "side": "FH",
+      "spin": [
+        "상회전"
+      ],
+      "length": "롱",
+      "target": "상대 미들(라켓 쪽 팔꿈치)",
+      "body": {
+        "x": -0.97,
+        "y": -1.78
+      },
+      "contact": {
+        "x": -0.62,
+        "y": -1.56
+      },
+      "bounces": [
+        {
+          "x": 0.08,
+          "y": 1.2
+        }
+      ],
+      "explain": {
+        "what": "돌아선 자리를 유지한 채 포핸드로 한 번 더. 코스를 상대 미들(라켓 손 팔꿈치)로 바꿔 포핸드/백핸드 선택을 강요한다.",
+        "why": "같은 크로스를 반복하면 상대가 리듬을 탄다. 미들은 상대가 발을 움직여야만 제대로 칠 수 있는 유일한 코스다.",
+        "keys": [
+          "두 번째 공격은 첫 공격보다 빠르게(회전보다 속도).",
+          "미들로 보낸 뒤에는 상대의 어정쩡한 리턴이 어느 쪽으로든 올 수 있으니 중앙 복귀."
+        ],
+        "mistakes": [
+          "같은 코스(백핸드 크로스)로 두 번 쳐서 상대에게 카운터 기회 주기."
+        ]
+      }
+    }
+  ]
+}
+</script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 데이터 ----------
+  const TACTIC = JSON.parse(document.getElementById('tactic-data').textContent);
+
+  // ---------- 좌표계 ----------
+  // 미터 → px. 100px = 1m. 원점(테이블 중심)은 (210, 310). 화면 위가 상대, 아래가 나.
+  const S = 100, W = 420, H = 620, CX = 210, CY = 310;
+  // 보이는 영역: 선수가 서는 범위(좌우 ±1.8m, 앞뒤 ±2.3m)만 잘라 보여준다
+  const VB = { x: 30, y: 80, w: 360, h: 475 };
+  const TW = 1.525 * S, TL = 2.74 * S;
+  const TX = CX - TW / 2, TY = CY - TL / 2;
+  const px = (p) => ({ x: CX + p.x * S, y: CY - p.y * S });
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const NS = 'http://www.w3.org/2000/svg';
+  function el(name, attrs, parent) {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function txt(parent, x, y, str, cls) {
+    const t = el('text', { x, y, class: cls || '' }, parent);
+    t.textContent = str;
+    return t;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+  const svg = document.getElementById('board');
+  svg.setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
+  const layers = {};
+  ['floor', 'history', 'current', 'players'].forEach((n) => { layers[n] = el('g', { id: 'L-' + n }, svg); });
+
+  // ---------- 고정 배경: 바닥, 테이블, 존, 라벨 ----------
+  function drawFloor() {
+    const g = layers.floor;
+    el('rect', { x: 0, y: 0, width: W, height: H, rx: 8, class: 'floor' }, g);
+    for (let x = CX % 50; x <= W; x += 50) el('line', { x1: x, y1: 0, x2: x, y2: H, class: 'grid' }, g);
+    for (let y = CY % 50; y <= H; y += 50) el('line', { x1: 0, y1: y, x2: W, y2: y, class: 'grid' }, g);
+
+    el('rect', { x: TX, y: TY, width: TW, height: TL, class: 'table' }, g);
+    [TW / 3, (2 * TW) / 3].forEach((dx) => el('line', { x1: TX + dx, y1: TY, x2: TX + dx, y2: TY + TL, class: 'zone' }, g));
+    [1, 2, 4, 5].forEach((k) => { const y = TY + (TL * k) / 6; el('line', { x1: TX, y1: y, x2: TX + TW, y2: y, class: 'zone' }, g); });
+    el('line', { x1: CX, y1: TY, x2: CX, y2: TY + TL, class: 'center' }, g);
+    el('line', { x1: TX - 15.25, y1: CY, x2: TX + TW + 15.25, y2: CY, class: 'net' }, g);
+    el('rect', { x: TX - 17, y: CY - 3, width: 3.5, height: 6, class: 'post' }, g);
+    el('rect', { x: TX + TW + 13.5, y: CY - 3, width: 3.5, height: 6, class: 'post' }, g);
+
+    // 코스 라벨: 상대(위)는 마주 보고 있으므로 FH가 화면 왼쪽
+    const sixth = TW / 6;
+    txt(g, TX + sixth, TY - 6, 'FH', 'lbl'); txt(g, CX, TY - 6, '미들', 'lbl'); txt(g, TX + 5 * sixth, TY - 6, 'BH', 'lbl');
+    txt(g, TX + sixth, TY + TL + 11, 'BH', 'lbl'); txt(g, CX, TY + TL + 11, '미들', 'lbl'); txt(g, TX + 5 * sixth, TY + TL + 11, 'FH', 'lbl');
+    txt(g, TX + TW + 26, TY - 6, '상대 코트', 'lbl small');
+    txt(g, TX + TW + 24, TY + TL + 11, '내 코트', 'lbl small');
+    // 길이 라벨(오른쪽)
+    const lx = TX + TW + 6;
+    [['롱', 1], ['하프롱', 3], ['쇼트', 5], ['쇼트', 7], ['하프롱', 9], ['롱', 11]].forEach(([s, k]) => txt(g, lx, TY + (TL * k) / 12 + 2.5, s, 'lbl small start'));
+    txt(g, TX - 6, CY + 2.5, '네트', 'lbl small').setAttribute('text-anchor', 'end');
+    // 치수와 스케일 바
+    txt(g, TX + 3, TY + TL - 4, '2.74 × 1.525 m', 'lbl small').setAttribute('text-anchor', 'start');
+    g.lastChild.style.fill = 'var(--zone)';
+    const sx = VB.x + 14, sy = VB.y + VB.h - 14;
+    el('line', { x1: sx, y1: sy, x2: sx + S, y2: sy, class: 'scale' }, g);
+    el('line', { x1: sx, y1: sy - 4, x2: sx, y2: sy + 4, class: 'scale' }, g);
+    el('line', { x1: sx + S, y1: sy - 4, x2: sx + S, y2: sy + 4, class: 'scale' }, g);
+    txt(g, sx + S / 2, sy - 5, '1 m', 'lbl small');
+  }
+
+  // ---------- 선수 마커 ----------
+  const players = {};
+  function makePlayer(key, label) {
+    const g = el('g', { class: 'player ' + key }, layers.players);
+    el('circle', { r: 12, class: 'body' }, g);
+    txt(g, 0, 3.4, label);
+    players[key] = { g, pos: Object.assign({}, TACTIC.start[key]) };
+  }
+  function placePlayer(key, pt) {
+    const q = px(pt);
+    players[key].g.setAttribute('transform', `translate(${q.x.toFixed(2)} ${q.y.toFixed(2)})`);
+    players[key].pos = pt;
+  }
+
+  // ---------- 시퀀스(분기 반영) ----------
+  const byId = Object.fromEntries(TACTIC.shots.map((s) => [s.id, s]));
+  function buildSeq(key) {
+    const seq = [];
+    let cur = byId[TACTIC.root];
+    while (cur) {
+      seq.push(cur);
+      const nx = cur.next;
+      if (!nx) break;
+      if (typeof nx === 'string') cur = byId[nx];
+      else { const b = nx.branches.find((x) => x.key === key) || nx.branches[0]; cur = byId[b.next]; }
+    }
+    return seq;
+  }
+  function branchNode(seq) { return seq.find((s) => s.next && s.next.branches); }
+  function posBefore(seq, i) {
+    const p = { me: Object.assign({}, TACTIC.start.me), opp: Object.assign({}, TACTIC.start.opp) };
+    for (let k = 0; k < i; k++) p[seq[k].actor] = seq[k].body;
+    return p;
+  }
+
+  // ---------- 경로 기하 ----------
+  function shotPoints(seq, k) {
+    const s = seq[k];
+    const pts = [s.contact].concat(s.bounces);
+    const nxt = seq[k + 1];
+    if (nxt) pts.push(nxt.contact);
+    else {
+      const a = pts[pts.length - 2], b = pts[pts.length - 1];
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      pts.push({ x: b.x + (dx / L) * 0.35, y: b.y + (dy / L) * 0.35 });
+    }
+    return pts.map(px);
+  }
+  // 손으로 그린 화살표처럼 아주 살짝 휘게. 방향이 반대인 두 크로스 코스가 서로 다른 쪽으로 휘어 겹치지 않는다.
+  function pathD(P) {
+    let d = `M${P[0].x.toFixed(1)} ${P[0].y.toFixed(1)}`;
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i];
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, k = 0.05 * L;
+      const cx = (a.x + b.x) / 2 + (-dy / L) * k, cy = (a.y + b.y) / 2 + (dx / L) * k;
+      d += ` Q${cx.toFixed(1)} ${cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+    }
+    return d;
+  }
+  function measure(d) {
+    const p = el('path', { d, fill: 'none', stroke: 'none' }, svg);
+    const L = p.getTotalLength();
+    svg.removeChild(p);
+    return L;
+  }
+  function spinGlyph(spins) {
+    const g = { '하회전': '↓', '상회전': '↑', '너클': '○', '횡회전': '↔', '횡하회전': '↙', '횡상회전': '↗' };
+    return spins.map((s) => g[s] || '').filter(Boolean).join('');
+  }
+  function clampX(x, w) { return Math.min(VB.x + VB.w - w / 2 - 4, Math.max(VB.x + w / 2 + 4, x)); }
+  // 2차 베지어 위의 점
+  function qpoint(a, c, b, t) {
+    const u = 1 - t;
+    return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+  }
+
+  // 배경 사각형이 있는 작은 라벨. 글자 폭을 측정해 사각형 크기를 정한다.
+  function badge(parent, x, y, str, cls) {
+    const g = el('g', { class: 'badge ' + (cls || '') }, parent);
+    const t = txt(g, 0, 0, str);
+    const w = t.getComputedTextLength() + 10;
+    const r = el('rect', { x: -w / 2, y: -7.5, width: w, height: 15, rx: 7.5 }, g);
+    g.insertBefore(r, t);
+    g.setAttribute('transform', `translate(${clampX(x, w).toFixed(1)} ${y.toFixed(1)})`);
+    return g;
+  }
+
+  // ---------- 한 구 그리기 ----------
+  // 반환: 애니메이션 핸들. final=true면 최종 상태로 바로 그린다.
+  function drawShot(seq, k, parent, opts) {
+    const s = seq[k];
+    const g = el('g', { class: 'shot-group ' + s.actor }, parent);
+    const before = posBefore(seq, k);
+    const bodyPx = px(s.body), contactPx = px(s.contact);
+    const H_ = {};
+
+    // 풋워크: 이전 위치(고스트) → 몸 위치 점선 화살표. 이름은 아래 스트로크 라벨에 함께 적는다.
+    if (s.footwork) {
+      const from = px(before[s.actor]), to = bodyPx;
+      const dx = to.x - from.x, dy = to.y - from.y, L = Math.hypot(dx, dy) || 1;
+      const a = { x: from.x + (dx / L) * 14, y: from.y + (dy / L) * 14 };
+      const b = { x: to.x - (dx / L) * 16, y: to.y - (dy / L) * 16 };
+      const fg = el('g', { class: 'foot' }, g);
+      el('circle', { cx: from.x, cy: from.y, r: 12, class: 'ghost' }, fg);
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
+      const fa = el('path', { d: `M${a.x} ${a.y} L${b.x} ${b.y}`, class: 'foot-arrow' }, fg);
+      H_.foot = {
+        reveal(t) {
+          fa.setAttribute('stroke-dasharray', t >= 1 ? '4 3' : `${seg * t} ${seg}`);
+          if (t >= 1) fa.setAttribute('marker-end', `url(#arrow-${s.actor})`);
+        }
+      };
+      if (opts.final) H_.foot.reveal(1);
+      else H_.foot.reveal(0);
+    }
+
+    // 라켓: 몸 → 임팩트 지점. 그 아래(상대는 위)에 "풋워크 → 스트로크" 라벨
+    const rk = el('g', { class: 'racket' }, g);
+    el('line', { x1: bodyPx.x, y1: bodyPx.y, x2: contactPx.x, y2: contactPx.y, class: 'racket-line' }, rk);
+    const ang = (Math.atan2(contactPx.y - bodyPx.y, contactPx.x - bodyPx.x) * 180) / Math.PI;
+    el('ellipse', { cx: contactPx.x, cy: contactPx.y, rx: 5.5, ry: 3.8, transform: `rotate(${ang.toFixed(1)} ${contactPx.x} ${contactPx.y})`, class: 'racket-head' }, rk);
+    if (!opts.noLabel) {
+      // 같은 자리에서 두 번 치면(전체 보기) 라벨을 한 줄씩 밀어 겹치지 않게
+      const slots = opts.slots || {};
+      const key = `${s.actor}:${bodyPx.x.toFixed(0)},${bodyPx.y.toFixed(0)}`;
+      const n = slots[key] || 0; slots[key] = n + 1;
+      const slY = s.actor === 'me' ? bodyPx.y + 25 + n * 11 : bodyPx.y - 20 - n * 11;
+      const strokeShort = s.stroke.replace(/\s*\(.*$/, '');
+      const sl = txt(rk, bodyPx.x, slY, (s.footwork ? s.footwork.type + ' → ' : '') + strokeShort, 'stroke-label');
+      sl.setAttribute('x', clampX(bodyPx.x, sl.getComputedTextLength()));
+    }
+    rk.style.opacity = opts.final ? 1 : 0;
+    H_.racket = { show() { rk.style.opacity = 1; } };
+
+    // 공 궤적
+    const P = shotPoints(seq, k);
+    const d = pathD(P);
+    const path = el('path', { d, class: 'shot' }, g);
+    const total = measure(d);
+    // 바운드 지점까지의 누적 길이(각 정점까지 부분 경로를 재서 구한다)
+    const cum = [0];
+    for (let i = 2; i <= P.length; i++) cum.push(measure(pathD(P.slice(0, i))));
+    const rings = s.bounces.map((b, i) => {
+      const q = px(b);
+      const rg = el('g', { class: 'bounce' }, g);
+      el('circle', { cx: q.x, cy: q.y, r: 4.6, class: 'ring' }, rg);
+      el('circle', { cx: q.x, cy: q.y, r: 1.6, class: 'ring-dot' }, rg);
+      return { g: rg, at: cum[i + 1] };
+    });
+    const ball = el('circle', { r: 4, class: 'ball' }, g);
+    ball.hidden = true;
+
+    // 번호와 회전 배지는 가장 긴 구간(네트를 넘는 구간) 위에 놓되,
+    // 구 순서대로 위(상대 쪽)에서 아래(내 쪽)로 사다리처럼 높이를 나눠 서로 겹치지 않게 한다.
+    let mainI = 1, mainL = 0;
+    for (let i = 1; i < P.length; i++) { const L = Math.hypot(P[i].x - P[i - 1].x, P[i].y - P[i - 1].y); if (L > mainL) { mainL = L; mainI = i; } }
+    const a = P[mainI - 1], b = P[mainI];
+    const nx = -(b.y - a.y) / mainL, ny = (b.x - a.x) / mainL; // 휘는 쪽 법선
+    const ctrl = { x: (a.x + b.x) / 2 + nx * 0.05 * mainL, y: (a.y + b.y) / 2 + ny * 0.05 * mainL };
+    const ladderY = CY - (0.9 - (1.8 * k) / Math.max(1, seq.length - 1)) * S;
+    let tt = Math.abs(b.y - a.y) < 1 ? 0.5 : (ladderY - a.y) / (b.y - a.y);
+    tt = Math.min(0.88, Math.max(0.12, tt));
+    const m = qpoint(a, ctrl, b, tt);
+    const numb = el('g', { class: 'numb', transform: `translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})` }, g);
+    el('circle', { r: 7.5 }, numb);
+    txt(numb, 0, 0.5, String(s.n));
+    const bd = badge(g, m.x - nx * 24, m.y - ny * 24, `${spinGlyph(s.spin)} ${s.spin.join('/')} · ${s.length}`);
+    bd.style.opacity = opts.final ? 1 : 0;
+    numb.style.opacity = opts.final ? 1 : 0;
+
+    H_.len = total;
+    H_.flight = function (t) {
+      const L = total * t;
+      path.setAttribute('stroke-dasharray', t >= 1 ? 'none' : `${L} ${total}`);
+      if (t >= 1) path.setAttribute('marker-end', `url(#arrow-${s.actor})`);
+      rings.forEach((r) => { r.g.style.opacity = L >= r.at - 0.5 ? 1 : 0; });
+      if (!opts.noBall) {
+        const q = path.getPointAtLength(Math.min(L, total));
+        let seg = 0; while (seg < cum.length - 2 && L > cum[seg + 1]) seg++;
+        const segT = (L - cum[seg]) / Math.max(1, cum[seg + 1] - cum[seg]);
+        ball.setAttribute('cx', q.x.toFixed(2)); ball.setAttribute('cy', q.y.toFixed(2));
+        ball.setAttribute('r', (3.6 + 2.2 * Math.sin(Math.PI * Math.min(1, Math.max(0, segT)))).toFixed(2));
+        ball.hidden = false;
+      }
+    };
+    H_.badge = { show() { bd.style.opacity = 1; numb.style.opacity = 1; } };
+    if (opts.final) H_.flight(1); else { H_.flight(0); rings.forEach((r) => { r.g.style.opacity = 0; }); }
+    if (opts.noBall) ball.hidden = true;
+    return H_;
+  }
+
+  // ---------- 상태 ----------
+  let branchKey = TACTIC.defaultBranch || 'A';
+  let seq = buildSeq(branchKey);
+  let idx = 0;
+  let overview = false;
+  let runId = 0;
+  let playing = false;
+  const speedSel = document.getElementById('speed');
+  const spd = () => parseFloat(speedSel.value);
+
+  function tween(ms, fn) {
+    const my = runId;
+    return new Promise((res) => {
+      if (reduced || ms <= 0) { fn(1); res(true); return; }
+      const t0 = performance.now();
+      function frame(now) {
+        if (my !== runId) { res(false); return; }
+        const t = Math.min(1, (now - t0) / ms);
+        fn(ease(t));
+        if (t < 1) requestAnimationFrame(frame); else res(true);
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+
+  // 한 구를 보여준다. animate=true면 풋워크 → 타구 순서로 움직인다.
+  async function render(i, animate) {
+    const my = ++runId;
+    idx = Math.max(0, Math.min(seq.length - 1, i));
+    overview = false;
+    clear(layers.history); clear(layers.current);
+    renderPanel(); renderStepper(); syncButtons();
+
+    const hg = el('g', { class: 'history' }, layers.history);
+    for (let k = 0; k < idx; k++) drawShot(seq, k, hg, { final: true, noBall: true, noLabel: true });
+
+    const pb = posBefore(seq, idx);
+    placePlayer('me', pb.me); placePlayer('opp', pb.opp);
+
+    const s = seq[idx];
+    const parts = drawShot(seq, idx, layers.current, { final: !animate });
+    if (!animate) { placePlayer(s.actor, s.body); return true; }
+
+    if (parts.foot) {
+      const from = pb[s.actor], to = s.body;
+      const ok = await tween(700 * spd(), (t) => { placePlayer(s.actor, lerp(from, to, t)); parts.foot.reveal(t); });
+      if (!ok || my !== runId) return false;
+      await wait(120 * spd());
+      if (my !== runId) return false;
+    } else placePlayer(s.actor, s.body);
+    parts.racket.show();
+    await wait(140 * spd());
+    if (my !== runId) return false;
+    const ok2 = await tween(Math.max(650, parts.len * 3.4) * spd(), (t) => parts.flight(t));
+    if (!ok2 || my !== runId) return false;
+    parts.badge.show();
+    return true;
+  }
+
+  function renderOverview() {
+    ++runId; playing = false; overview = true;
+    clear(layers.history); clear(layers.current);
+    renderPanel(); renderStepper(); syncButtons();
+    const slots = {};
+    for (let k = 0; k < seq.length; k++) drawShot(seq, k, layers.current, { final: true, noBall: true, slots });
+    const pe = posBefore(seq, seq.length);
+    placePlayer('me', pe.me); placePlayer('opp', pe.opp);
+  }
+
+  async function playAll() {
+    if (playing) { ++runId; playing = false; syncButtons(); return; }
+    playing = true; syncButtons();
+    let start = overview || idx >= seq.length - 1 ? 0 : idx;
+    for (let i = start; i < seq.length; i++) {
+      const ok = await render(i, true);
+      if (!ok || !playing) { playing = false; syncButtons(); return; }
+      if (i < seq.length - 1) { const my = runId; await wait(900 * spd()); if (my !== runId) { playing = false; syncButtons(); return; } }
+    }
+    playing = false; syncButtons();
+  }
+
+  function stop() { ++runId; playing = false; }
+
+  // ---------- 패널 ----------
+  const card = document.getElementById('card');
+  function branchHTML() {
+    const bn = branchNode(seq);
+    if (!bn) return '';
+    const bi = seq.indexOf(bn);
+    if (!overview && idx < bi) return '';
+    const who = seq[bi + 1] ? `${seq[bi + 1].n}구` : '다음 구';
+    return `<div class="branch">
+      <h3>${who} 분기 · 상대 리턴 방향에 따라</h3>
+      <div class="branch-opts">${bn.next.branches.map((b) => `
+        <button type="button" class="branch-btn" data-branch="${esc(b.key)}" aria-pressed="${b.key === branchKey}">
+          <b>${esc(b.key)}</b><span>${esc(b.label)}</span><small>${b.share != null ? `실전 비율 약 ${Math.round(b.share * 100)}%` : ''}</small>
+        </button>`).join('')}
+      </div></div>`;
+  }
+  function renderPanel() {
+    if (overview) {
+      card.innerHTML = `
+        <div class="card-head"><div class="num wide">요약</div>
+          <div class="head-text"><h2 class="title">${esc(TACTIC.title)}</h2></div></div>
+        <section class="sec"><p>${esc(TACTIC.summary)}</p></section>
+        <section class="sec"><h3>구 순서 · 분기 ${esc(branchKey)}</h3>
+          <ol class="steps">${seq.map((s, i) => `<li><button type="button" data-step="${i}"><b>${s.n}구</b><span>${esc(s.title)}</span><span class="who ${s.actor}">${s.actor === 'me' ? '나' : '상대'}</span></button></li>`).join('')}</ol>
+        </section>
+        ${branchHTML()}`;
+    } else {
+      const s = seq[idx];
+      const e = s.explain || {};
+      const keysLabel = s.actor === 'me' ? '체크포인트' : '읽기 포인트';
+      card.innerHTML = `
+        <div class="card-head"><div class="num">${s.n}구</div>
+          <div class="head-text">
+            <span class="actor ${s.actor}">${s.actor === 'me' ? '나' : '상대'}</span>
+            <h2 class="title">${esc(s.title)}</h2>
+          </div></div>
+        <dl class="facts">
+          <div><dt>스트로크</dt><dd>${esc(s.stroke)}</dd></div>
+          <div><dt>회전</dt><dd>${esc(s.spin.join(' / '))}</dd></div>
+          <div><dt>길이</dt><dd>${esc(s.length)}</dd></div>
+          <div><dt>코스</dt><dd>${esc(s.target)}</dd></div>
+          ${s.footwork ? `<div><dt>풋워크</dt><dd>${esc(s.footwork.label || s.footwork.type)}</dd></div>` : ''}
+        </dl>
+        ${e.what ? `<section class="sec"><h3>무엇을</h3><p>${esc(e.what)}</p></section>` : ''}
+        ${e.why ? `<section class="sec"><h3>왜</h3><p>${esc(e.why)}</p></section>` : ''}
+        ${e.keys && e.keys.length ? `<section class="sec"><h3>${keysLabel}</h3><ul>${e.keys.map((k) => `<li>${esc(k)}</li>`).join('')}</ul></section>` : ''}
+        ${e.mistakes && e.mistakes.length ? `<section class="sec"><h3>흔한 실수</h3><ul>${e.mistakes.map((k) => `<li>${esc(k)}</li>`).join('')}</ul></section>` : ''}
+        ${branchHTML()}
+        <details><summary>이 구의 데이터 (JSON)</summary><pre>${esc(JSON.stringify(s, null, 2))}</pre></details>`;
+    }
+    card.querySelectorAll('[data-branch]').forEach((b) => b.addEventListener('click', () => setBranch(b.dataset.branch)));
+    card.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => { stop(); render(parseInt(b.dataset.step, 10), true); }));
+  }
+
+  const stepper = document.getElementById('stepper');
+  function renderStepper() {
+    stepper.innerHTML = seq.map((s, i) => `<button type="button" class="step-btn" data-step="${i}" ${!overview && i === idx ? 'aria-current="step"' : ''}>
+      <i class="dot" style="background: var(--${s.actor})"></i><b>${s.n}구</b><span>${esc(s.short)}</span></button>`).join('');
+    stepper.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { stop(); render(parseInt(b.dataset.step, 10), true); }));
+  }
+
+  const btnPrev = document.getElementById('prev'), btnNext = document.getElementById('next'), btnPlay = document.getElementById('play'), btnOv = document.getElementById('overview');
+  function syncButtons() {
+    btnPlay.textContent = playing ? '일시정지' : '재생';
+    btnPrev.disabled = !overview && idx === 0;
+    btnNext.disabled = !overview && idx >= seq.length - 1;
+    btnOv.setAttribute('aria-pressed', String(overview));
+  }
+  function setBranch(key) {
+    if (key === branchKey) return;
+    branchKey = key;
+    const was = overview, at = idx;
+    seq = buildSeq(branchKey);
+    stop();
+    if (was) renderOverview(); else render(Math.min(at, seq.length - 1), true);
+  }
+
+  btnPrev.addEventListener('click', () => { stop(); render(overview ? 0 : idx - 1, false); });
+  btnNext.addEventListener('click', () => { stop(); render(overview ? 0 : idx + 1, true); });
+  btnPlay.addEventListener('click', playAll);
+  btnOv.addEventListener('click', () => { if (overview) { stop(); render(idx, false); } else renderOverview(); });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target && /^(select|input|textarea)$/i.test(ev.target.tagName)) return;
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); if (!btnNext.disabled) btnNext.click(); }
+    else if (ev.key === 'ArrowLeft') { ev.preventDefault(); if (!btnPrev.disabled) btnPrev.click(); }
+    else if (ev.key === ' ') { ev.preventDefault(); playAll(); }
+  });
+
+  // ---------- 헤더 ----------
+  document.getElementById('tactic-title').textContent = TACTIC.title;
+  document.title = 'TT Tactics 전술 보드';
+  const hand = (h) => (h === 'L' ? '왼손' : '오른손');
+  document.getElementById('tactic-chips').innerHTML = [
+    TACTIC.category, TACTIC.level,
+    `${hand(TACTIC.players.me.hand)} vs ${hand(TACTIC.players.opp.hand)}`,
+    TACTIC.players.me.grip,
+  ].concat(TACTIC.tags || []).filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join('');
+
+  // ---------- 시작 ----------
+  drawFloor();
+  makePlayer('me', '나');
+  makePlayer('opp', '상대');
+  render(0, false);
+  // 웹폰트가 늦게 오면 배지 폭이 달라지므로 한 번 다시 그린다
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!playing) { if (overview) renderOverview(); else render(idx, false); } });
+})();
+</script>
+</body>
+</html>
